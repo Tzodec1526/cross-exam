@@ -1,0 +1,190 @@
+name: Release signed Windows installer
+
+on:
+  push:
+    tags:
+      - "[0-9]*.[0-9]*.[0-9]*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-windows:
+    name: Build, verify, and publish
+    runs-on: windows-2025
+    timeout-minutes: 60
+    environment: production-release
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.ref }}
+
+      - name: Use Node from .nvmrc
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Verify version, clean checkout, and toolchain pins
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          $version = (node -p "require('./package.json').version").Trim()
+          $lockVersion = (node -p "require('./package-lock.json').packages[''].version").Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Production releases require a stable numeric SemVer package version."
+          }
+          if ($env:GITHUB_REF_NAME -cne $version) {
+            throw "Release tag '$env:GITHUB_REF_NAME' must exactly equal package.json version '$version' (no v prefix)."
+          }
+          if ($lockVersion -cne $version) {
+            throw "package-lock.json version '$lockVersion' does not match package.json version '$version'."
+          }
+          if (git status --porcelain --untracked-files=all) {
+            throw "Release checkout is not clean."
+          }
+          $headCommit = (git rev-parse HEAD).Trim()
+          $mainMergeBase = (git merge-base HEAD origin/main).Trim()
+          if ($headCommit -cne $mainMergeBase) {
+            throw "Release tag target must be reachable from origin/main."
+          }
+          $expectedNode = "v$((Get-Content -LiteralPath .nvmrc -Raw).Trim())"
+          if ((node --version).Trim() -cne $expectedNode) {
+            throw "Expected Node $expectedNode from .nvmrc; found $(node --version)."
+          }
+          $packageManager = (node -p "require('./package.json').packageManager").Trim()
+          if ($packageManager -notmatch '^npm@(?<version>\d+\.\d+\.\d+)$') {
+            throw "package.json must pin packageManager to an exact npm version."
+          }
+          $npmVersion = $Matches.version
+          npm install --global "npm@$npmVersion"
+          if ((npm --version).Trim() -cne $npmVersion) {
+            throw "Expected npm $npmVersion; found $(npm --version)."
+          }
+          "APP_VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Require GitHub-verified signed annotated tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          $tag = $env:GITHUB_REF_NAME
+          $ref = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$tag" | ConvertFrom-Json
+          if ($ref.object.type -cne "tag") {
+            throw "Release tag '$tag' must be an annotated signed tag, not a lightweight tag."
+          }
+          $tagObject = gh api "repos/$env:GITHUB_REPOSITORY/git/tags/$($ref.object.sha)" | ConvertFrom-Json
+          if ($tagObject.tag -cne $tag) {
+            throw "Git tag object name does not match '$tag'."
+          }
+          if ($tagObject.object.type -cne "commit") {
+            throw "Release tag must point directly to a commit."
+          }
+          if ($tagObject.object.sha -cne (git rev-parse HEAD).Trim()) {
+            throw "Checked-out commit does not match the signed tag target."
+          }
+          if (-not $tagObject.verification.verified) {
+            throw "GitHub did not verify the release tag signature: $($tagObject.verification.reason)."
+          }
+          Write-Host "Verified signed annotated tag $tag ($($tagObject.verification.reason))."
+
+      - name: Require Windows signing secrets
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CSC_LINK)) {
+            throw "The production-release environment must provide CSC_LINK."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)) {
+            throw "The production-release environment must provide CSC_KEY_PASSWORD."
+          }
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build signed Windows installer
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npm run release:win
+
+      - name: Verify timestamped Authenticode signatures
+        id: signed_assets
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installerName = "Cross-Examination-Setup-$env:APP_VERSION-x64.exe"
+          $installer = Join-Path $PWD "release/$installerName"
+          $unpackedExe = Join-Path $PWD "release/win-unpacked/CrossExamination.exe"
+          foreach ($file in @($unpackedExe, $installer)) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+              throw "Expected signed artifact is missing: $file"
+            }
+            $signature = Get-AuthenticodeSignature -LiteralPath $file
+            if ($signature.Status.ToString() -cne "Valid" -or -not $signature.SignerCertificate) {
+              throw "Authenticode validation failed for ${file}: $($signature.Status) $($signature.StatusMessage)"
+            }
+            if (-not $signature.TimeStamperCertificate) {
+              throw "Authenticode signature has no trusted timestamp: $file"
+            }
+            Write-Host "Valid signature: $file"
+            Write-Host "  signer=$($signature.SignerCertificate.Subject)"
+            Write-Host "  timestamp=$($signature.TimeStamperCertificate.Subject)"
+          }
+          "installer=$installer" >> $env:GITHUB_OUTPUT
+          "installer_name=$installerName" >> $env:GITHUB_OUTPUT
+
+      - name: Generate CycloneDX SBOM and SHA-256 checksums
+        id: release_assets
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          $sbom = Join-Path $PWD "release/Cross-Examination-$env:APP_VERSION.cdx.json"
+          $checksum = Join-Path $PWD "release/Cross-Examination-$env:APP_VERSION-SHA256SUMS.txt"
+          # Include the complete locked graph: Electron is a build-time npm dependency
+          # whose runtime is embedded in the shipped application.
+          $sbomLines = npm sbom --package-lock-only --sbom-format=cyclonedx --sbom-type=application
+          [IO.File]::WriteAllLines($sbom, $sbomLines, [Text.UTF8Encoding]::new($false))
+          $parsedSbom = Get-Content -LiteralPath $sbom -Raw | ConvertFrom-Json
+          if ($parsedSbom.bomFormat -cne "CycloneDX") {
+            throw "npm did not produce a CycloneDX SBOM."
+          }
+          $assets = @("${{ steps.signed_assets.outputs.installer }}", $sbom)
+          $checksumLines = foreach ($asset in $assets) {
+            $hash = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $([IO.Path]::GetFileName($asset))"
+          }
+          [IO.File]::WriteAllLines($checksum, $checksumLines, [Text.UTF8Encoding]::new($false))
+          "sbom=$sbom" >> $env:GITHUB_OUTPUT
+          "checksum=$checksum" >> $env:GITHUB_OUTPUT
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          # Keep the release non-public until every asset upload succeeds.
+          gh release create $env:GITHUB_REF_NAME `
+            --draft `
+            --verify-tag `
+            --title "Cross Examination $env:APP_VERSION" `
+            --generate-notes
+          gh release upload $env:GITHUB_REF_NAME `
+            "${{ steps.signed_assets.outputs.installer }}" `
+            "${{ steps.release_assets.outputs.sbom }}" `
+            "${{ steps.release_assets.outputs.checksum }}"
+          gh release edit $env:GITHUB_REF_NAME --draft=false --latest

@@ -1,0 +1,6 @@
+extends: ./electron-builder.yml
+
+# A public release must never silently fall back to an unsigned executable.
+# electron-builder reads CSC_LINK and CSC_KEY_PASSWORD from the environment.
+forceCodeSigning: true
+publish: never

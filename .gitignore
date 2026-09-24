@@ -1,0 +1,26 @@
+node_modules/
+dist/
+dist-electron/
+release/
+.DS_Store
+*.log
+.env
+.env.local
+matters/*
+!matters/.gitkeep
+data/*
+!data/.gitkeep
+*.local
+.claude/
+.cursor/
+*.pfx
+*.p12
+*.cer
+*.pem
+# Grok/Claude harness: MCP tool descriptor dumps (ephemeral — do not commit or edit)
+mcps/
+
+
+# Marketing render outputs (large binaries)
+marketing/hype-video/output/
+

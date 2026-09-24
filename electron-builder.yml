@@ -1,0 +1,66 @@
+appId: com.cedoz.cross-examination
+productName: Cross Examination
+copyright: Copyright © 2026 Cross Examination
+
+directories:
+  output: release
+  buildResources: build
+
+# This is intentionally an allowlist. electron-builder does not honor
+# .gitignore when selecting application files, so a broad glob could package
+# live matters, API keys, tests, or developer-only source.
+files:
+  - package.json
+  - from: dist
+    to: dist
+    filter:
+      - "**/*"
+  - from: dist-electron
+    to: dist-electron
+    filter:
+      - "**/*"
+
+asar: true
+compression: maximum
+removePackageScripts: true
+
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  # Official Electron Windows distributions ship v8_context_snapshot.bin, not
+  # browser_v8_context_snapshot.bin. Enabling this fuse would make startup fatal.
+  loadBrowserProcessSpecificV8Snapshot: false
+  grantFileProtocolExtraPrivileges: false
+  # Note: scripts/verify-package.mjs also asserts WasmTrapHandlers=ENABLE, which
+  # this electron-builder schema cannot set; it relies on Electron's shipped
+  # default. If a future Electron flips that default, verification fails closed
+  # here rather than silently shipping the change.
+
+win:
+  executableName: CrossExamination
+  icon: build/icon.png
+  artifactName: "Cross-Examination-Setup-${version}-${arch}.${ext}"
+  requestedExecutionLevel: asInvoker
+  signtoolOptions:
+    signingHashAlgorithms:
+      - sha256
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Cross Examination
+  uninstallDisplayName: Cross Examination
+  deleteAppDataOnUninstall: false
+
+publish: null

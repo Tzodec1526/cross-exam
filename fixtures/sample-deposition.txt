@@ -1,0 +1,67 @@
+DEPOSITION OF JORDAN LEE HARRIS
+Smith Manufacturing LLC v. Apex Logistics, Inc.
+Case No. 3:24-cv-01842
+Taken July 12, 2025
+
+APPEARANCES:
+For Plaintiff: Counsel for Smith Manufacturing
+For Defendant: Counsel for Apex Logistics
+Witness: Jordan Lee Harris, Director of Operations, Apex Logistics, Inc.
+
+JORDAN LEE HARRIS, having been first duly sworn, testified as follows:
+
+Q. Please state your full name for the record.
+A. Jordan Lee Harris.
+
+Q. What is your position at Apex Logistics?
+A. I'm the Director of Operations. I've held that role since March 2021.
+
+Q. Who do you report to?
+A. I report to the COO, Patricia Okonkwo.
+
+Q. Are you familiar with the shipment of industrial coolants under purchase order PO-4491?
+A. Yes. That was a rush shipment scheduled for delivery to Smith Manufacturing on November 3, 2024.
+
+Q. Did that shipment arrive on November 3, 2024?
+A. No. It arrived on November 8, 2024.
+
+Q. Why was it late?
+A. There was a driver shortage at our Dayton hub. I was told about the shortage on November 1 by the hub manager, Marcus Webb.
+
+Q. Did you notify Smith Manufacturing of the delay on November 1?
+A. I believe customer service sent an email. I did not personally call anyone at Smith.
+
+Q. Did you review Exhibit 12 before today, the email chain between Apex and Smith?
+A. Yes.
+
+Q. Looking at Exhibit 12, is there any email from Apex dated November 1, 2024 advising of a delay?
+A. I don't see one dated November 1. There is an email on November 4 apologizing for the delay.
+
+Q. So as of November 3, the original delivery date, Smith had not been told the load would miss?
+A. Based on Exhibit 12, that appears correct. I don't independently remember a November 1 notice.
+
+Q. What was the temperature-control requirement for PO-4491?
+A. The coolants required refrigerated transport between 35 and 45 degrees Fahrenheit.
+
+Q. Was the trailer used on November 8 a refrigerated trailer?
+A. Yes. Unit R-208.
+
+Q. Do you know whether the temperature log for R-208 on that trip stayed within range?
+A. I have not seen a temperature log that confirms continuous compliance. Our system shows the reefer was set to 38 degrees, but I cannot testify that it never went out of range.
+
+Q. Have you seen Exhibit 18, the temperature download for R-208 dated November 8?
+A. I glanced at it this morning. It shows a spike to 58 degrees for about 40 minutes near mile marker 142.
+
+Q. Did you investigate that spike?
+A. Not personally. I asked fleet maintenance to check the unit. I never received a written report.
+
+Q. Did Apex offer Smith a credit for the late delivery?
+A. I recommended a 10% freight credit. I don't know if it was issued.
+
+Q. Who would know whether the credit was issued?
+A. Accounts receivable, or possibly Patricia Okonkwo.
+
+Q. Prior to this lawsuit, did you destroy any emails related to PO-4491?
+A. No. I followed the litigation hold I received in January 2025.
+
+END OF EXCERPT

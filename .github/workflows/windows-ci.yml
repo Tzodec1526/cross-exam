@@ -1,0 +1,71 @@
+name: Windows CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-qa:
+    name: Check and package QA
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      # CI exercises the unpacked package; it never creates a release artifact.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Use Node from .nvmrc
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Verify toolchain pins
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          $expectedNode = "v$((Get-Content -LiteralPath .nvmrc -Raw).Trim())"
+          if ((node --version).Trim() -cne $expectedNode) {
+            throw "Expected Node $expectedNode from .nvmrc; found $(node --version)."
+          }
+          $packageManager = (node -p "require('./package.json').packageManager").Trim()
+          if ($packageManager -notmatch '^npm@(?<version>\d+\.\d+\.\d+)$') {
+            throw "package.json must pin packageManager to an exact npm version."
+          }
+          $npmVersion = $Matches.version
+          npm install --global "npm@$npmVersion"
+          if ((npm --version).Trim() -cne $npmVersion) {
+            throw "Expected npm $npmVersion; found $(npm --version)."
+          }
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run full verification
+        run: npm run check
+
+      - name: Build unpacked Windows QA package
+        run: npm run package:dir
+
+      - name: Verify packaged contents and Electron fuses
+        run: npm run verify:package
+
+      - name: Smoke-test packaged application
+        run: npm run smoke:package
